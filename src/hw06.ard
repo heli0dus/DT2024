@@ -1,12 +1,17 @@
 \import Data.Bool
 \import Data.List (List, length)
 \import Logic
+\import Meta
+\import Paths
+\import Paths.Meta
 \import lect06
 \open Nat(+,*)
 
 -- 1. Определите предикат принадлежности элемента списку.
 
-\data In {A : \Type} (a : A) (xs : List A)
+\data In {A : \Type} (a : A) (xs : List A) \with
+  | a, (x List.:: xs) => headIn (a = x)
+  | a, (x List.:: xs) => tailIn (In a xs)
 
 -- Optional:
 -- 2. Докажите эквивалентность четырех различных определений LessOrEq: lessOrEq, lessOrEq', LessOrEq и LessOrEq'.
@@ -15,6 +20,9 @@
 --    То есть ReflTransClosure R -- это минимальное рефлексивное и транзитивное отношение, содержащее R.
 
 \data ReflTransClosure {A : \Type} (R : A -> A -> \Type) (x y : A)
+  | refl (x = y)
+  | trans (z : A) (ReflTransClosure R x z)  (ReflTransClosure R z y)
+  | containsR (R x y)
 
 -- 4. Докажите, что если R уже рекфлексивно и транзитивно, то ReflTransClosure R эквивалентно R.
 
@@ -22,26 +30,91 @@
 
 \func ReflTransClosure-lem {A : \Type} (R : A -> A -> \Type) (refl : \Pi (x : A) -> R x x) (trans : \Pi (x y z : A) -> R x y -> R y z -> R x z)
   : \Pi (x y : A) -> R x y <-> ReflTransClosure R x y
-  => {?}
+  => \lam x y => (\lam x => containsR x,
+  \lam clsr => aux x y clsr)
+  \where
+    \func aux (x y : A) (clsr : ReflTransClosure R x y) : R x y \elim clsr
+    | ReflTransClosure.refl p => rewrite p (refl y)
+    | ReflTransClosure.trans z clsr1 clsr2 => trans x z y (aux x z clsr1) (aux z y clsr2)
+    | containsR r => r
+
 
 -- 5. Определите предикат Sublist xs ys на списках, означающий "список xs является подсписком ys".
 
+\data Sublist {A : \Type} (xs ys : List A) \with
+  | List.nil, _ => nilIsSublist
+  | (x List.:: xs), (y List.:: ys) => headEqHead (x = y) (Sublist xs ys)
+  | xs, (y List.:: ys) => sublistToTail (Sublist xs ys)
+
 -- 6. Докажите, что Sublist (filter p xs) xs для любых p и xs.
+
+\func filteredIsSublist {A : \Type} (p : A -> Bool) (xs : List A) : Sublist (filter p xs) xs
+  | p, List.nil => nilIsSublist
+  | p, a List.:: xs => mcases \with {
+    | true => headEqHead idp (filteredIsSublist p xs)
+    | false => sublistToTail (filteredIsSublist p xs)
+  }
 
 -- 7. Определите filter через if, а не через \case.
 --     Докажите для этой версии filter лемму filter-lem.
 
-\func filter' {A : \Type} (p : A -> Bool) (xs : List A) : List A => {?}
+\func filter' {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | List.nil => List.nil
+  | a List.:: xs => if (p a) (a List.:: filter' p xs) (filter' p xs)
 
-\func filter-lem {A : \Type} (p : A -> Bool) (xs : List A) : LessOrEq (length (filter' p xs)) (length xs) => {?}
+\func filter-lem {A : \Type} (p : A -> Bool) (xs : List A) : LessOrEq (length (filter' p xs)) (length xs) \elim xs
+  | List.nil => zero<=_
+  | a List.:: xs => cases (p a) \with {
+    | false => <=-step-lem (filter-lem p xs)
+    | true => suc<=suc (filter-lem p xs)
+  }
 
 -- 8. Закончите определение функции \func BoolFuncLem (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x из лекции.
+
+\func BoolFuncLem (f : Bool -> Bool) (x : Bool) : f (f (f x)) = f x =>
+  \case \elim x, f true \as tru, idp : f true = tru, f false \as fls, idp : f false = fls \with {
+    | false, false, p, false, q => rewrite q (rewrite q q)
+    | false, false, p, true,  q => rewrite q (rewrite p q)
+    | false, true,  p, false, q => rewrite q (rewrite q q)
+    | false, true,  p, true,  q => rewrite q (rewrite p p)
+    | true,  false, p, false, q => rewrite p (rewrite q q)
+    | true,  false, p, true,  q => rewrite p (rewrite q p)
+    | true,  true,  p, false, q => rewrite p (rewrite p p)
+    | true,  true,  p, true,  q => rewrite p (rewrite p p)
+  }
 
 -- 9. Докажите, что предикат isEven разрешим.
 
 \func isEven (n : Nat) => \Sigma (k : Nat) (n = 2 * k)
 
-\func isEven-dec : DecPred isEven => {?}
+\func isEvenind {n : Nat} (p : isEven n) : isEven (suc (suc n)) => (suc p.1, \case p.2 \with {
+  | p1 => pmap (\lam n => suc (suc n)) p1
+})
+
+\func isEvenindReversed {n : Nat} (p : isEven (suc (suc n))) : isEven n =>
+  ( cases (p.1, p.2) \with {
+    | suc x, x1 => x
+  }
+  , cases (p.1, p.2) \with {
+    | suc x, x1 => pmap (\lam n => cases n \with {
+      | 0 => 0
+      | 1 => 1
+      | suc (suc n1) => n1
+    }) x1
+  })
+
+\func isEven-dec : DecPred isEven => \lam n => aux n
+\where
+  \func aux (n : Nat) : Decide (isEven n)
+    | 0 => yes (0, idp)
+    | 1 => no (\lam p => \case p.1 \as p1', p.2 : 1 = 2 * p1' \with {
+      | 0, p1 => \case p1
+      | suc p1', p1 => \case p1
+    })
+    | suc (suc n) => cases (aux n) \with {
+      | yes a => yes (isEvenind a)
+      | no n1 => no \lam p => n1 (isEvenindReversed p)
+    }
 
 -- 10. Докажите, что функции FromBoolToDec и FromDecToBool взаимно обратны.
 
@@ -52,7 +125,7 @@
 
 \func dbd {A : \Type} (P : \Sigma (P : A -> \Type) (DecPred P))
   : \Pi (x : A) -> (FromBoolToDec (FromDecToBool P)).1 x <-> P.1 x
-  => {?}
+  => \lam x => (\lam _x => {?}, \lam _x => {?})
 
 -- Optional:
 -- 11. Парадокс Рассела показывает, что не существует множества всех множеств.
