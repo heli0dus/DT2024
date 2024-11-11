@@ -125,6 +125,8 @@
   | bind-id-right {A : \Type} (m : State' S A) => cases m \with {
     | state' _x => idp
   }
-  | bind-assoc {A B C : \Set} (m : State' S A) (k : A -> State' S B) (h : B -> State' S C) => cases m \with {
-    | state' _x => {?}
+  | bind-assoc {A B C : \Set} (m : State' S A) (k : A -> State' S B) (h : B -> State' S C) => cases (m >>= (\lam x => k x >>= h)) \with {
+    | state' _x => cases (m >>= k >>= h) \with {
+      | state' _x1 => pmap state' {?}
+    }
   }
