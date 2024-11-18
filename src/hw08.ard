@@ -1,6 +1,17 @@
+\import Algebra.Meta
+\import Arith.Nat
 \import Data.Bool
 \import Data.List \hiding (headDef)
+\import Data.Or
+\import Logic (absurd)
+\import Logic.Meta
+\import Meta
+\import Paths
+\import Paths.Meta
+\import Prelude (=, Nat, idp, path, suc)
+\import hw03 (ldistr)
 \import hw06
+\import lect02 (<=>)
 \import lect08
 \import Order.LinearOrder
 \open LinearOrder
@@ -10,15 +21,111 @@
 --    * Все элементы filter p xs удовлетворяют предикату p
 --    * Любой подсписок xs с тем же свойством является подсписком filter p xs
 
+\func filter {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | a :: xs => cases (p a) \with {
+    | false => filter p xs
+    | true => a :: filter p xs
+  }
+
+\data IsSubList {A : \Type} (xs ys : List A) \elim xs, ys
+  | nil, _ => nil-is-sublist
+  | x :: xs, y :: ys => head-eq-sublsit (x = y) (IsSubList xs ys)
+  | xs, y :: ys => head-neq-sublsit (IsSubList xs ys)
+
+\func filteredIsSublist {A : \Type} (p : A -> Bool) (xs : List A) : IsSubList (filter p xs) xs \elim xs
+  | nil => nil-is-sublist
+  | a :: xs => mcases \with {
+    | false => head-neq-sublsit (filteredIsSublist p xs)
+    | true => head-eq-sublsit idp (filteredIsSublist p xs)
+  }
+
+\func allFilteredStatisfyFilter {A : \Type} (p : A -> Bool) (xs : List A) : All (\lam s => So (p s)) (filter p xs) \elim xs
+  | nil => all-nil
+  | a :: xs => mcases {_} {arg addPath} \with {
+    | false, p1 => allFilteredStatisfyFilter p xs
+    | true, p1 => all-cons (So.toSo p1) (allFilteredStatisfyFilter p xs)
+  }
+
+\func allStatusfyingSublistsSublistFiltered {A : \Type}
+                                            (p : A -> Bool)
+                                            {xs xs' : List A}
+                                            (p' : IsSubList xs' xs)
+                                            (q : All (\lam s => So (p s)) xs') : IsSubList xs' (filter p xs) \elim xs, xs'
+  | nil, nil => nil-is-sublist
+  | nil, a :: xs' => contradiction
+  | a :: xs, nil => nil-is-sublist
+  | a :: xs, a1 :: xs' => cases p' \with {
+    | head-eq-sublsit p1 p'1 => mcases {_} {arg addPath} \with {
+      | false, p'' => cases q \with {
+        | all-cons p2 q1 => \case true/=false (inv (So.fromSo p2) *> pmap p p1 <* p'')
+      }
+      | true, p'' => cases q \with {
+        | all-cons _ q1 => head-eq-sublsit p1 (allStatusfyingSublistsSublistFiltered p p'1 q1)
+      }
+    }
+    | head-neq-sublsit p'1 => mcases \with {
+      | false => allStatusfyingSublistsSublistFiltered p p'1 q
+      | true => head-neq-sublsit (allStatusfyingSublistsSublistFiltered p p'1 q)
+    }
+  }
+
 -- 2. Докажите, что Perm l1 l2 тогда и только тогда, когда Insertion.sort l1 = Insertion.sort l2.
+
+\func perm-comm {A : \Type} {l1 l2 : List A} (p : Perm l1 l2) : Perm l2 l1 \elim l1, l2, p
+  | nil, nil, perm-nil => perm-nil
+  | x :: l3, y :: l4, perm-:: p p1 => perm-:: (inv p) (perm-comm p1)
+  | l3, l4, perm-trans p1 p2 => perm-trans (perm-comm p2) (perm-comm p1)
+  | x :: (x' :: l3), y :: (y' :: l4), perm-swap p p1 p2 => perm-swap (inv p1) (inv p) (inv p2)
+
+\func listsPermIfSortedEqually {A : Dec} {l1 l2 : List A} : Perm l1 l2 <=> (Insertion.sort l1 = Insertion.sort l2) =>
+  ( \lam perm => aux1 l1 l2 perm
+  , \lam p => perm-trans (Insertion.sort-perm l1) (rewrite p (perm-comm (Insertion.sort-perm l2))))
+  \where {
+    \func aux1 {A : Dec} (l1 l2 : List A) (p : Perm l1 l2) : Insertion.sort l1 = Insertion.sort l2 \elim l1, l2, p
+      | nil, nil, perm-nil => idp
+      | x :: l3, y :: l4, perm-:: p p1 => rewrite p (pmap (Insertion.sort.insert y) (aux1 l3 l4 p1))
+      | l3, l4, perm-trans p1 p2 => aux1 l3 _ p1 *> aux1 _ l4 p2
+      | x :: (x' :: l3), y :: (y' :: l4), perm-swap p p1 p2 => rewrite p (rewrite p1 (rewrite p2 (Insertion.sort-perm.insert-comm y' y _)))
+  }
+
 
 -- 3. Докажите, что спецификация "результат является перестановкой входа и отсортирован" является полной для функции sort.
 
 \func completeness {A : Dec} (sort : List A -> List A) (l : List A) (p : Perm l (sort l)) (s : Sorted (sort l)) : sort l = Insertion.sort l
-  => {?}
+  => aux (sort l) (Insertion.sort l) s (Insertion.sort-sorted l) (perm-trans (perm-comm p) (Insertion.sort-perm l))
+  \where {
+    \func aux {A : Dec} (l1 l2 : List A) (s1 : Sorted l1) (s2 : Sorted l2) (p : Perm l1 l2) : l1 = l2 =>
+      rewrite (inv (aux2 l2 s2)) (rewrite (inv (aux2 l1 s1)) ((listsPermIfSortedEqually {A} {l1} {l2}).1 p))
+    \func aux2 {A : Dec} (l : List A) (s : Sorted l) : Insertion.sort l = l
+      | nil, sorted-nil => idp
+      | x :: l1, sorted-:: _x s1 => pmap (Insertion.sort.insert x) (aux2 l1 s1) *> (\case \elim l1, \elim _x \with {
+        | nil, _x => idp
+        | a :: l1, x<=a => mcases \with {
+          | inl a<x => absurd (x<=a a<x)
+          | inr x<=a' => idp
+        }
+      })
+  }
 
 -- 4. Определите факториал через хвостовую рекурсию.
 --    Докажите, что он равен обычному определению факториала.
+\open Nat
+
+\func fac_tailrec (n : Nat) (acc : Nat) : Nat \elim n
+  | 0 => acc
+  | suc n => fac_tailrec n (suc n * acc)
+
+\func fac (n : Nat) : Nat
+  | 0 => 1
+  | suc n => suc n * fac n
+
+\func fac=fac_tailrec (n : Nat) : fac_tailrec n 1 = fac n => aux n 1 <* equation
+  \where {
+    \func aux (n : Nat) (acc : Nat) : fac_tailrec n acc = acc * fac n \elim n
+      | 0 => idp
+      | suc n => aux n (suc n * acc) <* equation
+  }
 
 -- 5. Функция isBalanced проверяет правильность скобочной последовательности.
 --    Докажите ее корректность.
@@ -42,4 +149,7 @@
   | xs => append-balanced {ys zs : List Paren} (Balanced ys) (Balanced zs) (xs = ys ++ zs)
 
 \func isBalanced-correct (xs : List Paren) : (isBalanced xs = true) <-> Balanced xs
-  => {?}
+  => (\lam ib => cases xs \with {
+    | nil => {?}
+    | a :: xs1 => {?}
+  }, {?})
