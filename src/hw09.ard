@@ -1,51 +1,123 @@
 \import Data.Maybe
-\import lect06 (Decide)
+\import Logic
+\import Meta
+\import Paths
+\import Paths.Meta
+\import hw06 (ReflTransClosure, containsR, refl, trans)
+\import hw07 ()
+\import lect06 (Decide, no, yes)
 \import lect09
 
 -- 1. Определите отношение многошаговой редукции на Term.
 
-\func Red {V : \Set} (t s : Term V) : \Type => {?}
+\func Red {V : \Set} (t s : Term V) : \Type => ReflTransClosure Red1 t s
 
 -- 2. Стратегия редукции -- это функция, которая каждому терму сопоставляет либо некоторый терм, к которому он редуцируется за 1 шаг, либо доказательство, что таких термов нет.
 --    Определите любую стратегию редукции.
 
-\func strategy {V : \Set} (t : Term V) : Decide (\Sigma (s : Term V) (Red1 t s)) => {?}
+\func strategy {V : \Set} (t : Term V) : Decide (\Sigma (s : Term V) (Red1 t s)) \elim t
+  | var v => no \lam p => \case p.2
+  | app t1 t2 => cases (strategy t1) \with {
+    | yes a => yes (app (a.1) t2, app-left a.2 idp)
+    | no n => cases (strategy t2) \with {
+      | yes a => yes (app t1 a.1, app-right idp a.2)
+      | no n1 => cases (aux t1) \with {
+        | yes a => yes (a.1 >>= maybe t2 var, beta a.2 idp)
+        | no n2 => no \lam p => cases (p.1, p.2) \with {
+          | x, beta {f} p1 p2 => n2 (f, p1)
+          | app x x1, app-left x2 p1 => n (x, x2)
+          | app x x1, app-right p1 x2 => n1 (x1, x2)
+        }
+      }
+    }
+  }
+  | lam t => cases (strategy t) \with {
+    | yes a => yes (lam a.1, lam-red a.2)
+    | no n => no \lam p => cases (p.1, p.2) \with {
+      | lam x, lam-red x1 => n (x, x1)
+    }
+  }
+  | unit => no \lam p => \case p.2
+  \where {
+    \func aux {V : \Set} (t : Term V) : Decide (\Sigma (f : Term (Maybe V)) (t = lam f)) \elim t
+      | var v => no \lam p => \case p.2
+      | app t1 t2 => no \lam p => \case p.2
+      | lam t => yes (t, idp)
+      | unit => no \lam p => \case p.2
+  }
+
 
 -- 3. Докажите, что подтермы достижимого терма достижимы.
 
-\func appAccLeft {V : \Set} {t s : Term V} (a : Acc Red1 (app t s)) : Acc Red1 t
-  => {?}
+\func appAccLeft {V : \Set} {t s : Term V} (a : Acc Red1 (app t s)) : Acc Red1 t \elim a
+  | acc _x => acc \lam {t'} r => appAccLeft (_x {app t' s} (app-left r idp))
 
-\func appAccRight {V : \Set} {t s : Term V} (a : Acc Red1 (app t s)) : Acc Red1 s
-  => {?}
+\func appAccRight {V : \Set} {t s : Term V} (a : Acc Red1 (app t s)) : Acc Red1 s \elim a
+  | acc _x => acc \lam {t'} r => appAccRight (_x {app t t'} (app-right idp r))
 
-\func subLamAcc {V : \Set} {t : Term (Maybe V)} (a : Acc Red1 (lam t)) : Acc Red1 t
-  => {?}
+\func subLamAcc {V : \Set} {t : Term (Maybe V)} (a : Acc Red1 (lam t)) : Acc Red1 t \elim a
+  | acc _x => acc \lam {t'} r => subLamAcc (_x (lam-red r))
 
 -- 4. Определите функцию, которая по достижимому терму возвращает длину максимальной цепочки редукций из него.
 
-\func red-length {V : \Set} (t : Term V) (acc : Acc Red1 t) : Nat
-  => {?}
+--Вспомогательаня фукнция "стратегия" которая возвращает не одну цепочку а сразу енсколько
+\func red-length {V : \Set} (t : Term V) (acc : Acc Red1 t) : Nat = {?}--\elim acc
+--  | acc _x => cases (strategy t) \with {
+--    | yes a => 1 Nat.+ red-length a.1 (_x a.2)
+--    | no n => 0
+--  }
+  \where {
+    \func hasRedex {V : \Set} (t : Term V) : Nat \elim t
+      | var v => 0
+      | app t1 t2 => {?}
+      | lam t => {?}
+      | unit => {?}
+  }
 
 -- 5. Докажите, что нейтральные термы замкнуты относительно редукций.
 
-\func neutralRed {V : \Set} {t s : Term V} (r : Red1 t s) (n : Neutral t) : Neutral s
-  => {?}
+\func neutralRed {V : \Set} {t s : Term V} (r : Red1 t s) (n : Neutral t) : Neutral s \elim t, s, r, n
+  | app t t1, s, beta p p1, neutral-app n a => \case rewrite p in n
+  | app t t1, app s s1, app-left r p, neutral-app n a => neutral-app (neutralRed r n) (rewrite p in a)
+  | app t t1, app s s1, app-right p r, neutral-app n a => cases a \with {
+    | acc _x => neutral-app (rewrite p in n) (_x r)
+  }
 
 -- 6. Докажите следующую обобщенную лемму о подстановке и выведите из нее обычную версию: если Г, x : A |- b : B и Г |- a : A, то Г |- b[a/x] : B.
 
 \func substLem {U V : \Set} (ctx : U -> Type) (b : Term U) (B : Type) (h : hasType ctx b B)
                (ctx' : V -> Type) (a : U -> Term V) (h' : \Pi (u : U) -> hasType ctx' (a u) (ctx u))
-  : hasType ctx' (b >>= a) B
-  => {?}
+  : hasType ctx' (b >>= a) B \elim b, B, h
+  | var v, B, type-var p => rewrite (inv p) (h' v)
+  | unit, Unit, type-unit => type-unit
+  | app b b1, B, type-app h1 h2 => {?}
+  | lam b, Arr B B1, type-lam h => type-lam (substLem (maybe B ctx) b B1 h (maybe B ctx') (liftM a) (\lam u => cases u \with {
+    | nothing => type-var idp
+    | just a1 => cases (a a1, h' a1) \with {
+      | var v, type-var p => {?}
+      | app x x1, type-app x2 x3 => {?}
+      | lam x, x1 => {?}
+      | unit, x => {?}
+    }
+  }))
 
 \func substLem1 => {?}
 
 -- 7. Докажите, что если Г |- a : A и Red a a', то Г |- a' : A
 
 \func redLem {V : \Set} {ctx : V -> Type} {a a' : Term V} (r : Red a a') {A : Type} (h : hasType ctx a A)
-  : hasType ctx a' A
-  => {?}
+  : hasType ctx a' A \elim r
+  | refl p => rewrite (inv p) h
+  | trans z r r1 => redLem r1 (redLem r h)
+  | containsR r => {?}
+  \where {
+    \func red1Lem {V : \Set} {ctx : V -> Type} {a a' : Term V} (r : Red1 a a') {A : Type} (h : hasType ctx a A)
+      : hasType ctx a' A \elim a, a', r, A, h
+      | app a1 a2, a'1, beta p p1, A1, type-app h1 h2 => {?}
+      | app a1 a2, app a'1 a'2, app-left r p, A1, type-app h1 h2 => {?}
+      | app a1 a2, app a'1 a'2, app-right p r, A1, type-app h1 h2 => {?}
+      | lam a1, lam a'1, lam-red r, Arr A1 A2, type-lam h1 => {?}
+  }
 
 -- Optional
 -- 8. Для доказательства typeableInterp понадобится вспомогательное утверждение. Докажите его.
