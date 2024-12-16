@@ -1,26 +1,63 @@
 \import Data.Bool
-\import Logic (<->)
+\import Equiv
+\import Equiv.Univalence
+\import Logic (<->, prop-pi)
+\import Logic.Meta
+\import Meta
+\import Paths (pmap)
+\import Paths.Meta
 \import lect11
 
 -- 1. Докажите, что если A : \Prop, то Trunc A эквивалентен A.
 
-\func trunc-prop {A : \Prop} : Trunc A <-> A => {?}
+\func trunc-prop {A : \Prop} : Trunc A <-> A => (\lam t => \case \elim t \with {
+    | trunc a => a
+  }, trunc)
 
 -- 2. Докажите следующий закон де Моргана.
 
-\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C)) => {?}
+\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C)) =>
+  (\lam _x => cases _x.2 \with {
+    | inl a => inl (_x.1, a)
+    | inr b => inr (_x.1, b)
+  } ,
+   \lam o => \case \elim o \with {
+     | inl a => (a.1, inl a.2)
+     | inr b => (b.1, inr b.2)
+   })
 
 -- 3. Определите элиминатор для Or через Or-rec, не используя паттерн матчинг на Or.
 
 \func Or-elim {A B : \Prop} (C : Or A B -> \Prop)
               (f : \Pi (x : A) -> C (inl x)) (g : \Pi (y : B) -> C (inr y))
-              (p : A `Or` B) : C p => {?}
+              (p : A `Or` B) : C p => transport C prop-pi (Or-rec {A} {B} {\Sigma (p1 : A `Or` B) (C p1)} (\lam x => (inl x, f x)) (\lam x => (inr x, g x)) p).2
 
 -- 4. Докажите, что тип утверждений является множеством.
 
-\func prop-isSet : isSet \Prop => {?}
+\func prop-isSet : isSet \Prop => \lam x y x1 y1 => prop-pi
 
 -- 5. Докажите, что функции Prop1-to-Prop2 и Prop2-to-Prop1 взаимно обратны и, как следствие, что Prop1 = Prop2.
+
+-- ... : \Prop = Prop2
+\func Prop1<->Prop2 : \Sigma (\Pi (A : \Prop) -> Prop2-to-Prop1 (Prop1-to-Prop2 A) = A) (\Pi (A : Prop2) -> Prop1-to-Prop2 (Prop2-to-Prop1 A) = A)
+  => (\lam A => ext (\lam p => \case p \with {
+        | inc a => a
+      } , inc),
+      \lam A => ext (ext (\new QEquiv {
+        | f => \lam a => \scase a \with {
+          | inc a1 => a1
+        }
+        | ret => inc
+        | ret_f => \lam x => Prop2-to-Prop1'.dataIsProp _ _
+        | f_sec => \lam y => A.2 _ _
+      }), {?}))
+
+\func Prop1=Prop2 : \Prop = Prop2 => ext (\new QEquiv {
+  | f => Prop1-to-Prop2
+  | ret => Prop2-to-Prop1
+  | ret_f => Prop1<->Prop2.1
+  | f_sec => Prop1<->Prop2.2
+})
 
 -- Можно сделать только одно из упражнений 6a,6b на выбор.
 -- 6a. Тип С называется когенератором, если для любых множеств A и B и любых функция f,g : A -> B верно, что если h `o` f = h `o` g для всех h : B -> C, то f = g.
@@ -44,6 +81,24 @@
 -- Можно сделать только одно из упражнений 7a,7b на выбор.
 -- 7a. Докажите, что (Bool = Bool) = Bool.
 
-\func BoolAut : (Bool = Bool) = Bool => {?}
+\func BoolAut : (Bool = Bool) = Bool => ext (\new QEquiv {
+  | f => \lam p => ret {=-to-QEquiv p} true
+  | ret => \lam x => cases x \with {
+    | false => ext (\new QEquiv {
+      | f => not
+      | ret => not
+      | ret_f => not-not
+      | f_sec => not-not
+    })
+    | true => ext (\new QEquiv {
+      | f => \lam x => x
+      | ret => \lam x => x
+      | ret_f => \lam _ => idp
+      | f_sec => \lam _ => idp
+    })
+  }
+  | ret_f => \lam (x : Bool = Bool) => {?}
+  | f_sec => \lam y => {?}
+})
 
 -- 7b. Докажите, что (n+m)-элементное множество равно размеченному объединению n- и m-элементных множеств.
