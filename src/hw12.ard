@@ -1,15 +1,32 @@
+\import Algebra.Meta
+\import Function.Meta
 \import Logic
+\import Meta
+\import Paths
+\import Paths.Meta
+\import hw02
 \import lect12
 
 -- 1. Определите функцию negPred : Int -> Int такую, что negPred x = x, если x > 0, и negPred x = x - 1, если x <= 0.
 
-\func negPred (x : Int) : Int => {?}
+\func negPred (x : Int) : Int
+  | pos 0 => neg 1
+  | pos (suc n) => pos (suc n)
+  | neg n => neg (suc n)
 
 -- 2. Определите функции сложения и умножения для Int.
 
-\func \infixl 6 + (x y : Int) : Int => {?}
+\func \infixl 6 + (x y : Int) : Int
+  | pos n, pos n1 => pos (n Nat.+ n1)
+  | pos n, neg (suc n1) => n Nat.- suc n1
+  | neg (suc n), pos n1 => n1 Nat.- suc n
+  | neg (suc n), neg (suc n1) => neg (n Nat.+ n1)
 
-\func \infixl 7 * (x y : Int) : Int => {?}
+\func \infixl 7 * (x y : Int) : Int
+  | pos n, pos n1 => pos (n Nat.* n1)
+  | pos n, neg (suc n1) => neg (n Nat.* suc n1)
+  | neg (suc n), pos n1 => neg (suc n Nat.* n1)
+  | neg (suc n), neg (suc n1) => pos (suc n Nat.* suc n1)
 
 -- 3. Определите тип данных BinNat для бинарных натуральных чисел.
 --    У него должно быть три конструктора: для 0, для чисел вида 2*n и чисел вида 2*n+1.
@@ -17,6 +34,11 @@
 --    Используйте типы данных с условиями, чтобы вычислительно отождествить различные нули.
 
 \data BinNat
+  | binzero
+  | twice BinNat \with {
+    | binzero => binzero
+  }
+  | twice+1 BinNat
 
 -- 4. Докажите, что функция pred сюръективна.
 
@@ -24,11 +46,13 @@
   | 0 => 0
   | suc n => n
 
-\func pred-is-sur : isSur pred => {?}
+\func pred-is-sur : isSur pred => \lam b => inP (suc b, idp)
 
 -- 5. Докажите, что функция suc не сюръективна.
 
-\func suc-is-not-sur (p : isSur suc) : Empty => {?}
+\func suc-is-not-sur (p : isSur suc) : Empty => \case p 0 \with {
+  | inP a => \case a.2
+}
 
 -- 6. Пусть f : A -> B и g : B -> C ─ некоторые функции.
 --    Докажите, что если f и g сюръективны, то g `o` f также сюръективна.
@@ -36,9 +60,15 @@
 
 \func \fixr 9 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam a => g (f a)
 
-\func o-sur {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur f) (q : isSur g) : isSur (g `o` f) => {?}
+\func o-sur {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur f) (q : isSur g) : isSur (g `o` f) => \lam c => cases (q c) \with {
+  | inP (b, y) => cases (p b) \with {
+    | inP (a, x) => inP (a, unfold o $ rewrite x y)
+  }
+}
 
-\func o-sur' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur (g `o` f)) : isSur g => {?}
+\func o-sur' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur (g `o` f)) : isSur g => \lam c => cases (p c) \with {
+  | inP (a, x) => inP (f a, x)
+}
 
 -- 7. Определите множество конечных подмножеств множества A, то есть списков элементов A с точностью до перестановок и повторений элементов.
 
